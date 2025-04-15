@@ -1,16 +1,9 @@
-import logging
 import os
-from aiogram import Bot, Dispatcher, types, F
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
-from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram import Router
-from fastapi import FastAPI, Request, UploadFile, Form
-from fastapi.responses import FileResponse
-from starlette.middleware.cors import CORSMiddleware
 import shutil
+from aiogram import Bot, Dispatcher, Router, types, F
+from aiogram.types import FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.fsm.storage.memory import MemoryStorage
 
-# ENV dəyişənlərini render panelindən əlavə edəcəksən
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = os.environ.get("ADMIN_ID")
 REGISTER_LINK = os.environ.get("REGISTER_LINK")
@@ -20,62 +13,65 @@ dp = Dispatcher(storage=MemoryStorage())
 router = Router()
 dp.include_router(router)
 
-users = set()  # qeydiyyatdan keçən istifadəçilər
-signals_folder = "signals"
-os.makedirs(signals_folder, exist_ok=True)
+users = set()
+signals_dir = "signals"
+os.makedirs(signals_dir, exist_ok=True)
 
 @router.message(F.text == "/start")
-async def start_handler(message: Message):
+async def start_cmd(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Qeydiyyatdan keç", url=REGISTER_LINK)],
         [InlineKeyboardButton(text="Siqnal al", callback_data="get_signal")]
     ])
-    await message.answer("Qeydiyyatdan keçmək üçün aşağıdakı düyməyə klik et:", reply_markup=kb)
+    await message.answer("Zəhmət olmasa qeydiyyatdan keçin:", reply_markup=kb)
 
 @router.callback_query(F.data == "get_signal")
-async def get_signal(callback: types.CallbackQuery):
+async def send_signal(callback: types.CallbackQuery):
     user_id = callback.from_user.id
-    if user_id not in users:
-        users.add(user_id)
-    signals = os.listdir(signals_folder)
-    if signals:
-        for s in signals:
-            path = os.path.join(signals_folder, s)
-            photo = FSInputFile(path)
-            await bot.send_photo(user_id, photo)
-    else:
+    users.add(user_id)
+
+    files = os.listdir(signals_dir)
+    if not files:
         await callback.message.answer("Hazırda siqnal yoxdur.")
+        await callback.answer()
+        return
+
+    for fname in files:
+        path = os.path.join(signals_dir, fname)
+        await bot.send_photo(chat_id=user_id, photo=FSInputFile(path))
+
     await callback.answer()
 
 @router.message(F.text == "/panel")
-async def admin_panel(message: Message):
+async def admin_panel(message: types.Message):
     if str(message.from_user.id) == ADMIN_ID:
-        await message.answer("Siqnal yükləmək üçün şəkil göndərin.\nSilmək üçün /sil [ad] yazın.")
+        await message.answer("Şəkil siqnalı göndərin və ya silmək üçün: /sil [ad]")
     else:
-        await message.answer("Bu əmr yalnız admin üçündür.")
+        await message.answer("Sizə icazə yoxdur.")
 
 @router.message(F.photo)
-async def upload_signal(message: Message):
+async def upload_photo(message: types.Message):
     if str(message.from_user.id) != ADMIN_ID:
         return
-    photo = message.photo[-1]
-    file = await bot.get_file(photo.file_id)
-    file_path = file.file_path.split("/")[-1]
-    dest = os.path.join(signals_folder, file_path)
-    await photo.download(destination_file=dest)
+
+    file = message.photo[-1]
+    file_name = f"{file.file_unique_id}.jpg"
+    path = os.path.join(signals_dir, file_name)
+    await file.download(destination_file=path)
     await message.answer("Siqnal yükləndi.")
 
 @router.message(F.text.startswith("/sil"))
-async def delete_signal(message: Message):
+async def delete_photo(message: types.Message):
     if str(message.from_user.id) != ADMIN_ID:
         return
+
     try:
-        name = message.text.split(" ")[1]
-        path = os.path.join(signals_folder, name)
+        name = message.text.split(" ", 1)[1]
+        path = os.path.join(signals_dir, name)
         if os.path.exists(path):
             os.remove(path)
             await message.answer("Siqnal silindi.")
         else:
-            await message.answer("Bu adla siqnal tapılmadı.")
+            await message.answer("Fayl tapılmadı.")
     except:
         await message.answer("İstifadə: /sil [ad]")
