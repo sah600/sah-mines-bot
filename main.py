@@ -1,13 +1,8 @@
-import uvicorn
-from fastapi import FastAPI
+import asyncio
 from bot import dp, bot
 
-app = FastAPI()
-
-@app.on_event("startup")
-async def on_startup():
-    await bot.delete_webhook(drop_pending_updates=True)
+async def main():
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=10000)
+    asyncio.run(main())
