@@ -28,7 +28,7 @@ async def send_signal(callback: types.CallbackQuery):
     files = os.listdir(signals_dir)
     if not files:
         await callback.message.answer("Hazırda siqnal yoxdur.")
-        await callback.answer()
+        await callback.answer("Siqnallar göndərildi.")
         return
 
     for fname in files:
