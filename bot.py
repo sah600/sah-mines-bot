@@ -1,5 +1,4 @@
 import os
-import shutil
 from aiogram import Bot, Dispatcher, Router, types, F
 from aiogram.types import FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -13,7 +12,6 @@ dp = Dispatcher(storage=MemoryStorage())
 router = Router()
 dp.include_router(router)
 
-users = set()
 signals_dir = "signals"
 os.makedirs(signals_dir, exist_ok=True)
 
@@ -27,9 +25,6 @@ async def start_cmd(message: types.Message):
 
 @router.callback_query(F.data == "get_signal")
 async def send_signal(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
-    users.add(user_id)
-
     files = os.listdir(signals_dir)
     if not files:
         await callback.message.answer("Hazırda siqnal yoxdur.")
@@ -38,7 +33,10 @@ async def send_signal(callback: types.CallbackQuery):
 
     for fname in files:
         path = os.path.join(signals_dir, fname)
-        await bot.send_photo(chat_id=user_id, photo=FSInputFile(path))
+        try:
+            await bot.send_photo(chat_id=callback.from_user.id, photo=FSInputFile(path))
+        except Exception as e:
+            await callback.message.answer(f"Xəta baş verdi: {e}")
 
     await callback.answer()
 
@@ -54,10 +52,14 @@ async def upload_photo(message: types.Message):
     if str(message.from_user.id) != ADMIN_ID:
         return
 
-    file = message.photo[-1]
-    file_name = f"{file.file_unique_id}.jpg"
+    photo = message.photo[-1]
+    file_name = f"{photo.file_unique_id}.jpg"
     path = os.path.join(signals_dir, file_name)
-    await file.download(destination_file=path)
+
+    file = await bot.download(photo.file_id)
+    with open(path, "wb") as f:
+        f.write(file.read())
+
     await message.answer("Siqnal yükləndi.")
 
 @router.message(F.text.startswith("/sil"))
