@@ -43,7 +43,12 @@ async def send_signal(callback: types.CallbackQuery):
 @router.message(F.text == "/panel")
 async def admin_panel(message: types.Message):
     if str(message.from_user.id) == ADMIN_ID:
-        await message.answer("Şəkil siqnalı göndərin və ya silmək üçün: /sil [ad]")
+        files = os.listdir(signals_dir)
+        if not files:
+            await message.answer("Hazırda heç bir siqnal yoxdur.")
+        else:
+            file_list = "\n".join(files)
+            await message.answer(f"Siqnallar:\n{file_list}\n\nYeni şəkil yüklə və ya silmək üçün: /sil [ad]")
     else:
         await message.answer("Sizə icazə yoxdur.")
 
