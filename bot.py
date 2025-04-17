@@ -1,4 +1,5 @@
 import os
+import random
 from aiogram import Bot, Dispatcher, Router, types, F
 from aiogram.types import FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -15,6 +16,8 @@ dp.include_router(router)
 signals_dir = "signals"
 os.makedirs(signals_dir, exist_ok=True)
 
+user_last_signal = {}
+
 @router.message(F.text == "/start")
 async def start_cmd(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -25,18 +28,29 @@ async def start_cmd(message: types.Message):
 
 @router.callback_query(F.data == "get_signal")
 async def send_signal(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
     files = os.listdir(signals_dir)
     if not files:
         await callback.message.answer("Hazırda siqnal yoxdur.")
-        await callback.answer("Siqnallar göndərildi.")
+        await callback.answer()
         return
 
-    for fname in files:
-        path = os.path.join(signals_dir, fname)
+    # Əvvəlki siqnalı sil
+    if user_id in user_last_signal:
         try:
-            await bot.send_photo(chat_id=callback.from_user.id, photo=FSInputFile(path))
-        except Exception as e:
-            await callback.message.answer(f"Xəta baş verdi: {e}")
+            await bot.delete_message(chat_id=user_id, message_id=user_last_signal[user_id])
+        except:
+            pass  # köhnə mesaj silinə bilmədi, amma davam et
+
+    # Yeni siqnal üçün təsadüfi bir şəkil seç
+    fname = random.choice(files)
+    path = os.path.join(signals_dir, fname)
+
+    try:
+        msg = await bot.send_photo(chat_id=user_id, photo=FSInputFile(path))
+        user_last_signal[user_id] = msg.message_id
+    except Exception as e:
+        await callback.message.answer(f"Xəta baş verdi: {e}")
 
     await callback.answer()
 
